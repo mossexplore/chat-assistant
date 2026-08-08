@@ -120,34 +120,51 @@ def test_subprocess_runner_maps_nonzero_exit(monkeypatch):
     assert "失败" in str(caught.value)
 
 
-def test_subprocess_runner_logs_success_elapsed_seconds(monkeypatch, caplog):
-    completed = subprocess.CompletedProcess(
-        ["chat-cli"], 0, b'{"resultCode":"0"}', b""
+def test_query_history_logs_count_and_elapsed_seconds_on_one_line(monkeypatch, caplog):
+    runner = FakeRunner(
+        json.dumps(
+            {
+                "resultCode": "0",
+                "resultContext": "Operate Success",
+                "respData": {
+                    "chatInfo": [
+                        {"msgId": "1", "content": "one"},
+                        {"msgId": "2", "content": "two"},
+                    ],
+                    "msgTotalCount": 2,
+                },
+            }
+        )
     )
-    timestamps = iter((10.0, 11.2345))
-    monkeypatch.setattr(subprocess, "run", lambda *_args, **_kwargs: completed)
+    timestamps = iter((10.0, 18.092))
     monkeypatch.setattr(
         "chat_message_agent.cli_client.time.perf_counter", lambda: next(timestamps)
     )
     with caplog.at_level("INFO"):
-        SubprocessRunner().run(["chat-cli", "im", "query-history-message"], 30)
-    assert "operation=query-history-message success=true" in caplog.text
-    assert "elapsed_seconds=1.235" in caplog.text
-    assert "exit_code=0" in caplog.text
+        ChatCliClient("chat-cli", runner=runner).query_history_messages(
+            group_id="987432812330259203",
+            query_count=2,
+        )
+    matching = [record for record in caplog.records if "elapsed_seconds" in record.getMessage()]
+    assert len(matching) == 1
+    assert matching[0].name == "cliclient"
+    assert matching[0].getMessage() == (
+        "[987432812330259203] count=2 elapsed_seconds=8.092"
+    )
 
 
-def test_subprocess_runner_logs_timeout_elapsed_seconds(monkeypatch, caplog):
-    def timeout(*_args, **_kwargs):
-        raise subprocess.TimeoutExpired("chat-cli", 30)
+def test_cli_client_logs_timeout_elapsed_seconds(monkeypatch, caplog):
+    class TimeoutRunner:
+        def run(self, _args, _timeout):
+            raise CliTimeoutError("timeout")
 
     timestamps = iter((20.0, 50.25))
-    monkeypatch.setattr(subprocess, "run", timeout)
     monkeypatch.setattr(
         "chat_message_agent.cli_client.time.perf_counter", lambda: next(timestamps)
     )
     with caplog.at_level("ERROR"), pytest.raises(CliTimeoutError):
-        SubprocessRunner().run(["chat-cli", "im", "send-to-group"], 30)
-    assert "operation=send-to-group success=false" in caplog.text
+        ChatCliClient("chat-cli", runner=TimeoutRunner()).send_to_group("123", text="hello")
+    assert "operation=send-to-group failed" in caplog.text
     assert "elapsed_seconds=30.250" in caplog.text
     assert "error_category=cli_timeout" in caplog.text
 

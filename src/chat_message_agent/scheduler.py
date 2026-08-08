@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from collections.abc import Callable
@@ -15,7 +14,7 @@ from .models import ChatMessage
 from .processor import MessageProcessor
 from .state import StateStore
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger("scheduler")
 
 
 def _id_key(value: str) -> tuple[int, int | str]:
@@ -165,7 +164,6 @@ class QueryScheduler:
             new_cursor = result.max_message_id or self._max_message_id(messages)
             if new_cursor:
                 self.state_store.set_cursor(group_id, new_cursor)
-            self._log_complete(group_id, len(messages), "initial")
             return
 
         for _page_number in range(1, self.max_pages + 1):
@@ -184,8 +182,6 @@ class QueryScheduler:
             new_cursor = self._max_message_id(messages)
             if new_cursor:
                 self.state_store.set_cursor(group_id, new_cursor)
-            self._log_complete(group_id, len(messages), "incremental")
-
             if len(result.messages) < config.initial_query_count or not new_cursor:
                 return
             cursor = new_cursor
@@ -222,10 +218,10 @@ class QueryScheduler:
                 if len(log_content) > 4096:
                     content += "…"
                 LOGGER.info(
-                    "event=group_message group_id=%s msg_id=%s content=%s",
-                    group_id,
-                    message.msg_id,
-                    json.dumps(content, ensure_ascii=False),
+                    "[%s] %s ➔ %s",
+                    message.group_id or group_id,
+                    message.sender,
+                    _single_line(content),
                 )
 
     @staticmethod
@@ -245,11 +241,7 @@ class QueryScheduler:
         values = [message.msg_id for message in messages if message.msg_id]
         return max(values, key=_id_key) if values else None
 
-    @staticmethod
-    def _log_complete(group_id: str, count: int, query_type: str) -> None:
-        LOGGER.info(
-            "event=history_query_completed group_id=%s message_count=%s query_type=%s",
-            group_id,
-            count,
-            query_type,
-        )
+
+
+def _single_line(value: str) -> str:
+    return value.replace("\r", "\\r").replace("\n", "\\n")
