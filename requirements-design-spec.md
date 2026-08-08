@@ -326,9 +326,10 @@ class MessageProcessor(Protocol):
 10. 每次聊天 CLI 调用完成或失败时记录 `event=cli_command_completed`，并包含操作名、成功状态及以秒为单位的 `elapsed_seconds`；失败时同时记录错误类别和可用的退出码。
 11. CLI 耗时日志不得输出消息文本、接收者、群组 ID、附件路径等命令参数。
 12. 新增独立文件 `logs/messages.log`；当 `log_group_message_content` 开启时，每条成功处理的完整消息按 `日志记录时间|msgId|groupType|contentType|serverSendTime|groupId|sender|receiver|content` 写入一行。
-13. `messages.log` 的消息正文不得截断；反斜杠、字段分隔符、回车和换行必须转义，以保证单条记录不跨行且字段可还原。
-14. `messages.log` 写入失败时不得推进当前页游标，确保后续查询能够重试该消息。
-15. 引用回复类型 `CARD_MSG` 的日志正文必须解析为 `cardContext.replyMsg.content + "↩" + cardContext.preMsg.content`；解析失败或结构不匹配时回退原始 `content`。
+13. `messages.log` 中的 `serverSendTime` 将 CLI 返回的 Unix 毫秒时间戳转换为带毫秒精度和 `Z` 后缀的 UTC ISO 8601 标准时间；无法识别的值保留原文。
+14. `messages.log` 的消息正文不得截断；反斜杠、字段分隔符、回车和换行必须转义，以保证单条记录不跨行且字段可还原。
+15. `messages.log` 写入失败时不得推进当前页游标，确保后续查询能够重试该消息。
+16. 引用回复类型 `CARD_MSG` 的日志正文必须解析为 `cardContext.replyMsg.content + "↩" + cardContext.preMsg.content`；解析失败或结构不匹配时回退原始 `content`。
 
 ### FR-014 CLI 结果与错误模型
 
