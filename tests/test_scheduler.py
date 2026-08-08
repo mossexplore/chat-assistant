@@ -3,6 +3,7 @@ from dataclasses import replace
 import pytest
 
 from chat_message_agent.config import AppConfig, ConfigManager
+from chat_message_agent.errors import PersistenceError
 from chat_message_agent.models import ChatMessage, HistoryQueryResult
 from chat_message_agent.processor import NoOpMessageProcessor
 from chat_message_agent.scheduler import QueryScheduler
@@ -46,7 +47,26 @@ class Collector:
         self.ids.append(message.msg_id)
 
 
-def make_scheduler(tmp_path, client, processor=None, *, count=2, max_pages=100):
+class MessageRecordCollector:
+    def __init__(self, *, fail=False):
+        self.records = []
+        self.fail = fail
+
+    def write(self, group_id, message):
+        if self.fail:
+            raise PersistenceError("message log failed")
+        self.records.append((group_id, message.msg_id, message.content))
+
+
+def make_scheduler(
+    tmp_path,
+    client,
+    processor=None,
+    *,
+    count=2,
+    max_pages=100,
+    message_record_writer=None,
+):
     manager = ConfigManager(tmp_path)
     manager.load()
     config = AppConfig(
@@ -72,6 +92,7 @@ def make_scheduler(tmp_path, client, processor=None, *, count=2, max_pages=100):
         state,
         processor or NoOpMessageProcessor(),
         client_factory=lambda _prefix: client,
+        message_record_writer=message_record_writer,
         max_pages=max_pages,
     )
     return scheduler, state, config
@@ -149,11 +170,18 @@ def test_multiple_groups_are_queried_sequentially_with_independent_cursors(tmp_p
 
 def test_message_content_logging_switch_takes_effect_without_restart(tmp_path, caplog):
     client = FakeClient([result([11]), result([12])])
-    scheduler, state, config = make_scheduler(tmp_path, client, count=10)
+    message_records = MessageRecordCollector()
+    scheduler, state, config = make_scheduler(
+        tmp_path,
+        client,
+        count=10,
+        message_record_writer=message_records,
+    )
     state.set_cursor("999", "10")
     with caplog.at_level("INFO"):
         scheduler.run_query_cycle(config)
     assert "event=group_message" not in caplog.text
+    assert message_records.records == []
 
     scheduler.config_manager.save(
         {
@@ -170,3 +198,29 @@ def test_message_content_logging_switch_takes_effect_without_restart(tmp_path, c
     with caplog.at_level("INFO"):
         scheduler.run_query_cycle(scheduler.config_manager.snapshot())
     assert 'event=group_message group_id=999 msg_id=12 content="12"' in caplog.text
+    assert message_records.records == [("999", "12", "12")]
+
+
+def test_message_log_failure_does_not_advance_cursor(tmp_path):
+    client = FakeClient([result([11])])
+    scheduler, state, config = make_scheduler(
+        tmp_path,
+        client,
+        count=10,
+        message_record_writer=MessageRecordCollector(fail=True),
+    )
+    state.set_cursor("999", "10")
+    scheduler.config_manager.save(
+        {
+            "schema_version": 2,
+            "cli_prefix": "chat-cli",
+            "scheduled_query_enabled": True,
+            "target_group_ids": ["999"],
+            "log_group_message_content": True,
+            "query_interval_seconds": 60,
+            "initial_query_count": 10,
+        }
+    )
+    with pytest.raises(PersistenceError, match="message log failed"):
+        scheduler.run_query_cycle(scheduler.config_manager.snapshot())
+    assert state.get_cursor("999") == "10"

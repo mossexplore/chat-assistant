@@ -8,6 +8,7 @@ from typing import Any
 class ChatMessage:
     msg_id: str
     content: str = ""
+    group_type: str = ""
     content_type: str = ""
     sender: str = ""
     receiver: str = ""

@@ -38,7 +38,12 @@ def test_parse_history_models_and_defaults():
                 "resultContext": "",
                 "respData": {
                     "chatInfo": [
-                        {"msgId": "10", "content": "你好", "atAccountList": ["alice"]},
+                        {
+                            "msgId": "10",
+                            "content": "你好",
+                            "groupType": "2",
+                            "atAccountList": ["alice"],
+                        },
                         {"msgId": "12", "serverSendTime": 4},
                     ],
                     "totalCount": 2,
@@ -49,6 +54,7 @@ def test_parse_history_models_and_defaults():
     assert result.max_message_id == "12"
     assert result.min_message_id == "10"
     assert result.messages[0].sender == ""
+    assert result.messages[0].group_type == "2"
     assert result.messages[0].at_account_list == ("alice",)
 
 

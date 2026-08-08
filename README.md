@@ -23,6 +23,7 @@ python -m chat_message_agent
 - `config.json`：用户配置；
 - `runtime_state.json`：各群组消息游标；
 - `logs/app.log`：轮转日志，单文件 10 MB、保留 5 份。
+- `logs/messages.log`：开启“打印群组消息日志”后写入的完整消息记录。
 
 请把免安装程序放在普通用户可写目录，不要放入受保护的 `Program Files`。配置损坏时程序保留原文件、用默认配置启动，并在页面显示错误；游标只在整页消息成功处理后推进。
 
@@ -33,6 +34,8 @@ python -m chat_message_agent
 新建配置的定时执行周期默认为 60 秒，首次查询条数默认为 2；已有 `config.json` 中的用户设置不会被自动覆盖。
 
 “打印群组消息日志”默认关闭。开启后，每条成功交给处理器的消息会记录群组 ID、消息 ID 和消息内容；换行会转义，内容最多记录 4096 个字符。该开关保存后实时生效。日志可能包含敏感信息，只应在确有需要时开启。
+
+开启该开关后，程序还会将每条完整消息写入 `logs/messages.log`，格式为 `日志记录时间|msgId|groupType|contentType|serverSendTime|groupId|sender|receiver|content`。该专用文件中的 `content` 不截断；反斜杠、竖线、回车和换行分别进行反斜杠转义，保证每条消息占一行并可还原。专用日志写入失败时不会推进当前页游标，后续查询会重试，避免永久漏记。
 
 每次实际执行聊天 CLI 后都会输出 `event=cli_command_completed` 结构化日志，其中包含操作名、成功状态、退出码或错误类别，以及以秒为单位、保留三位小数的 `elapsed_seconds`。日志不会输出消息文本、接收者、群组 ID、附件路径等 CLI 参数。
 
