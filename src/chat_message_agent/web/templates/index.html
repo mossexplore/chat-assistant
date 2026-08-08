@@ -39,10 +39,21 @@
           </div>
           <span class="field-error" id="scheduled_query_enabled-error"></span>
 
-          <label for="group-id">指定群组 ID</label>
-          <input id="group-id" name="target_group_id" type="text" inputmode="numeric" autocomplete="off"
-                 aria-describedby="target_group_id-error">
-          <span class="field-error" id="target_group_id-error"></span>
+          <label for="group-ids">指定群组 ID</label>
+          <textarea id="group-ids" name="target_group_ids" rows="5" autocomplete="off"
+                    aria-describedby="group-ids-help target_group_ids-error"></textarea>
+          <small id="group-ids-help">每行填写一个数字群组 ID，重复项会自动去除。</small>
+          <span class="field-error" id="target_group_ids-error"></span>
+
+          <div class="toggle-row">
+            <div>
+              <label for="log-message-content">打印群组消息日志</label>
+              <small>开启后日志会记录群组 ID、消息 ID 和消息内容，请注意敏感信息。</small>
+            </div>
+            <input id="log-message-content" name="log_group_message_content" type="checkbox"
+                   role="switch">
+          </div>
+          <span class="field-error" id="log_group_message_content-error"></span>
 
           <div class="grid">
             <div>

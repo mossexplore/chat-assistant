@@ -10,10 +10,11 @@ from chat_message_agent.state import StateStore
 
 def valid_config(**changes):
     value = {
-        "schema_version": 1,
+        "schema_version": 2,
         "cli_prefix": "chat-cli",
         "scheduled_query_enabled": False,
-        "target_group_id": "",
+        "target_group_ids": [],
+        "log_group_message_content": False,
         "query_interval_seconds": 30,
         "initial_query_count": 20,
     }
@@ -24,7 +25,7 @@ def valid_config(**changes):
 def test_config_creates_defaults_and_preserves_unknown_fields(tmp_path):
     manager = ConfigManager(tmp_path)
     assert manager.load() == AppConfig()
-    assert json.loads(manager.path.read_text(encoding="utf-8"))["schema_version"] == 1
+    assert json.loads(manager.path.read_text(encoding="utf-8"))["schema_version"] == 2
     manager.save({**valid_config(), "future_option": {"enabled": True}})
     manager.save(valid_config(query_interval_seconds=60))
     saved = json.loads(manager.path.read_text(encoding="utf-8"))
@@ -36,7 +37,7 @@ def test_invalid_config_does_not_replace_existing_file(tmp_path):
     manager.load()
     original = manager.path.read_bytes()
     with pytest.raises(ValidationError):
-        manager.save(valid_config(scheduled_query_enabled=True, target_group_id="12x"))
+        manager.save(valid_config(scheduled_query_enabled=True, target_group_ids=["12x"]))
     assert manager.path.read_bytes() == original
 
 
@@ -66,6 +67,35 @@ def test_config_notifies_after_successful_persistence(tmp_path):
     manager.subscribe(notified.append)
     config = manager.save(valid_config(query_interval_seconds=45))
     assert notified == [config]
+
+
+def test_legacy_single_group_config_is_migrated(tmp_path):
+    legacy = {
+        "schema_version": 1,
+        "cli_prefix": "chat-cli",
+        "scheduled_query_enabled": True,
+        "target_group_id": "90071992547409931",
+        "query_interval_seconds": 30,
+        "initial_query_count": 20,
+    }
+    (tmp_path / "config.json").write_text(json.dumps(legacy), encoding="utf-8")
+    manager = ConfigManager(tmp_path)
+    config = manager.load()
+    assert config.schema_version == 2
+    assert config.target_group_ids == ("90071992547409931",)
+    assert config.log_group_message_content is False
+    saved = json.loads(manager.path.read_text(encoding="utf-8"))
+    assert saved["target_group_ids"] == ["90071992547409931"]
+    assert "target_group_id" not in saved
+
+
+def test_group_ids_are_trimmed_and_deduplicated(tmp_path):
+    manager = ConfigManager(tmp_path)
+    manager.load()
+    config = manager.save(
+        valid_config(target_group_ids=[" 123 ", "456", "123"])
+    )
+    assert config.target_group_ids == ("123", "456")
 
 
 def test_state_stores_independent_string_cursors(tmp_path):

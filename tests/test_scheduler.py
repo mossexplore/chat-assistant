@@ -51,7 +51,7 @@ def make_scheduler(tmp_path, client, processor=None, *, count=2, max_pages=100):
     manager.load()
     config = AppConfig(
         scheduled_query_enabled=True,
-        target_group_id="999",
+        target_group_ids=("999",),
         initial_query_count=count,
     )
     manager.save(
@@ -59,7 +59,8 @@ def make_scheduler(tmp_path, client, processor=None, *, count=2, max_pages=100):
             "schema_version": config.schema_version,
             "cli_prefix": config.cli_prefix,
             "scheduled_query_enabled": config.scheduled_query_enabled,
-            "target_group_id": config.target_group_id,
+            "target_group_ids": list(config.target_group_ids),
+            "log_group_message_content": config.log_group_message_content,
             "query_interval_seconds": config.query_interval_seconds,
             "initial_query_count": config.initial_query_count,
         }
@@ -121,5 +122,51 @@ def test_group_switch_uses_independent_cursor(tmp_path):
     scheduler, state, config = make_scheduler(tmp_path, client)
     state.set_cursor("999", "10")
     state.set_cursor("888", "25")
-    scheduler.run_query_cycle(replace(config, target_group_id="888"))
+    scheduler.run_query_cycle(replace(config, target_group_ids=("888",)))
     assert client.calls[0]["message_id"] == "25"
+
+
+def test_multiple_groups_are_queried_sequentially_with_independent_cursors(tmp_path):
+    client = FakeClient([result([1], max_id="1"), result([5], max_id="5")])
+    scheduler, state, config = make_scheduler(tmp_path, client, count=10)
+    multi_config = replace(config, target_group_ids=("999", "888"))
+    scheduler.config_manager.save(
+        {
+            "schema_version": 2,
+            "cli_prefix": "chat-cli",
+            "scheduled_query_enabled": True,
+            "target_group_ids": ["999", "888"],
+            "log_group_message_content": False,
+            "query_interval_seconds": 30,
+            "initial_query_count": 10,
+        }
+    )
+    scheduler.run_query_cycle(multi_config)
+    assert [call["group_id"] for call in client.calls] == ["999", "888"]
+    assert state.get_cursor("999") == "1"
+    assert state.get_cursor("888") == "5"
+
+
+def test_message_content_logging_switch_takes_effect_without_restart(tmp_path, caplog):
+    client = FakeClient([result([11]), result([12])])
+    scheduler, state, config = make_scheduler(tmp_path, client, count=10)
+    state.set_cursor("999", "10")
+    with caplog.at_level("INFO"):
+        scheduler.run_query_cycle(config)
+    assert "event=group_message" not in caplog.text
+
+    scheduler.config_manager.save(
+        {
+            "schema_version": 2,
+            "cli_prefix": "chat-cli",
+            "scheduled_query_enabled": True,
+            "target_group_ids": ["999"],
+            "log_group_message_content": True,
+            "query_interval_seconds": 30,
+            "initial_query_count": 10,
+        }
+    )
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        scheduler.run_query_cycle(scheduler.config_manager.snapshot())
+    assert 'event=group_message group_id=999 msg_id=12 content="12"' in caplog.text
