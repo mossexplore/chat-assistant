@@ -168,7 +168,7 @@ query_history_messages(
 - 若提供 `message_id`，必须同时提供 `query_direction`；反之亦然。
 - 返回统一模型，至少包含 `messages`、`max_message_id`、`min_message_id`、`total_count` 和原始响应中的结果信息。
 - 消息模型至少包含：`msg_id`、`content`、`content_type`、`sender`、`receiver`、`group_id`、`server_send_time`、`at` 和 `at_account_list`。
-- 对响应中缺失的非关键字段提供安全默认值；缺失 `respData`、`chatInfo` 或业务失败时不得伪造成功结果。
+- 使用 `resultCode == "0"` 判断业务执行成功，并使用 `msgTotalCount` 判断本次是否存在消息。`msgTotalCount == 0` 时允许响应省略 `chatInfo` 并返回空消息列表；`msgTotalCount > 0` 时缺失有效 `chatInfo` 不得伪造成功结果。
 - CLI 执行设置可配置或代码常量形式的超时，建议默认 30 秒。
 - 正确处理 Windows 控制台编码；优先使用 UTF-8，解码失败时采用系统编码回退并记录告警。
 
@@ -183,8 +183,8 @@ query_history_messages(
 | `scheduled_query_enabled` | 定时查询指定群组开关 | 布尔值 | `false` | 仅允许 true/false |
 | `target_group_ids` | 指定群组 ID | 字符串数组 | `[]` | 每项为数字字符串；开关打开时至少一项；页面每行一个 |
 | `log_group_message_content` | 打印群组消息日志 | 布尔值 | `false` | 仅允许 true/false，保存后实时生效 |
-| `query_interval_seconds` | 定时执行周期（秒） | 整数 | `30` | 建议范围 5～86400 |
-| `initial_query_count` | 首次查询条数 | 整数 | `20` | 范围 1～100；可作为高级配置展示 |
+| `query_interval_seconds` | 定时执行周期（秒） | 整数 | `60` | 建议范围 5～86400 |
+| `initial_query_count` | 首次查询条数 | 整数 | `2` | 范围 1～100；可作为高级配置展示 |
 
 说明：原始配置清单中未列出“指定群组 ID”，但定时查询能力要求用户自定义群组，因此本说明书将其补充为必需配置项。
 
@@ -208,8 +208,8 @@ query_history_messages(
   "scheduled_query_enabled": false,
   "target_group_ids": ["987432812330259203", "987432812330259204"],
   "log_group_message_content": false,
-  "query_interval_seconds": 30,
-  "initial_query_count": 20
+  "query_interval_seconds": 60,
+  "initial_query_count": 2
 }
 ```
 
@@ -323,6 +323,8 @@ class MessageProcessor(Protocol):
 7. 日志写入失败不得导致核心进程退出，但应尽可能在控制台报告。
 8. `log_group_message_content` 关闭时不得输出消息正文；开启时逐条输出群组 ID、消息 ID 和经过换行转义的消息正文，正文最多记录 4096 个字符。
 9. 日志开关通过配置变更通知实时生效，正在处理的一页消息从下一条消息开始读取最新开关值。
+10. 每次聊天 CLI 调用完成或失败时记录 `event=cli_command_completed`，并包含操作名、成功状态及以秒为单位的 `elapsed_seconds`；失败时同时记录错误类别和可用的退出码。
+11. CLI 耗时日志不得输出消息文本、接收者、群组 ID、附件路径等命令参数。
 
 ### FR-014 CLI 结果与错误模型
 
@@ -346,8 +348,9 @@ class MessageProcessor(Protocol):
 5. PyInstaller 使用 `.spec` 文件显式包含 Flask 模板和静态资源。
 6. 默认采用 `--onefile`、`--windowed` 或等效 spec 配置生成单 EXE；为了保留用户要求的运行日志，可在正式决定隐藏控制台前提供 `--console` 构建，或确保文件日志和页面状态足以诊断。V1 建议使用 `--console`。
 7. `package.bat` 任一步骤失败时返回非零退出码，不得继续输出构建成功。
-8. 构建输出统一放入 `dist\`，最终文件名应稳定，例如 `chat-message-agent.exe`。
+8. 构建输出统一放入 `dist\`，最终文件名必须包含单一版本源中的版本号，例如 `chat-message-agent-v0.2.0.exe`。
 9. 构建过程不得把开发机上的 `config.json`、`runtime_state.json` 或日志打进 EXE。
+10. Windows EXE 的 `FileVersion` 和 `ProductVersion` 文件属性必须与 `src/chat_message_agent/version.py` 及文件名中的版本一致。
 
 ## 9. 非功能需求
 

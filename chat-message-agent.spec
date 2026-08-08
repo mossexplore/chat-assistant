@@ -1,9 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
+import sys
 from pathlib import Path
 
 project_root = Path(SPECPATH)
 source_root = project_root / "src"
 web_root = source_root / "chat_message_agent" / "web"
+sys.path.insert(0, str(source_root))
+
+from chat_message_agent.version import __version__ as app_version
+
+version_file = project_root / "build" / "version_info.txt"
 
 a = Analysis(
     [str(source_root / "chat_message_agent" / "__main__.py")],
@@ -28,10 +34,11 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="chat-message-agent",
+    name=f"chat-message-agent-v{app_version}",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     console=True,
+    version=str(version_file) if version_file.is_file() else None,
 )

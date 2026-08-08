@@ -21,8 +21,8 @@ class AppConfig:
     scheduled_query_enabled: bool = False
     target_group_ids: tuple[str, ...] = ()
     log_group_message_content: bool = False
-    query_interval_seconds: int = 30
-    initial_query_count: int = 20
+    query_interval_seconds: int = 60
+    initial_query_count: int = 2
 
 
 KNOWN_FIELDS = {item.name for item in fields(AppConfig)}

@@ -30,7 +30,13 @@ python -m chat_message_agent
 
 在配置页面的“指定群组 ID”文本框中每行填写一个数字群组 ID。目标群组没有游标时，程序按“首次查询条数”查询最近消息并建立游标。此后每次 CLI 调用固定携带 `--message-id <cursor> --query-direction 1`，对可能重复返回的游标消息去重，并在满页时继续分页。真实 CLI 的首次查询参数语义仍需按设计说明书的“待联调确认项”在目标环境验证。
 
+新建配置的定时执行周期默认为 60 秒，首次查询条数默认为 2；已有 `config.json` 中的用户设置不会被自动覆盖。
+
 “打印群组消息日志”默认关闭。开启后，每条成功交给处理器的消息会记录群组 ID、消息 ID 和消息内容；换行会转义，内容最多记录 4096 个字符。该开关保存后实时生效。日志可能包含敏感信息，只应在确有需要时开启。
+
+每次实际执行聊天 CLI 后都会输出 `event=cli_command_completed` 结构化日志，其中包含操作名、成功状态、退出码或错误类别，以及以秒为单位、保留三位小数的 `elapsed_seconds`。日志不会输出消息文本、接收者、群组 ID、附件路径等 CLI 参数。
+
+历史查询以 `resultCode == "0"` 判断 CLI 业务执行成功，并以 `msgTotalCount` 判断是否返回了新消息。当 `msgTotalCount` 为 0 时，CLI 可以省略 `chatInfo`，程序会将其解析为正常的空结果。
 
 ## 测试与静态检查
 
@@ -47,10 +53,10 @@ python -m ruff check .
 
 ```bat
 package.bat
-dist\chat-message-agent.exe --version
+dist\chat-message-agent-v0.2.0.exe --version
 ```
 
-脚本安装受控范围内的构建依赖、读取唯一版本来源、清理本项目构建产物并使用 PyInstaller one-file console 模式生成 `dist\chat-message-agent.exe`。配置、运行状态和日志不会打入 EXE。
+脚本安装受控范围内的构建依赖、读取唯一版本来源、生成 Windows 版本资源、清理本项目构建产物并使用 PyInstaller one-file console 模式生成 `dist\chat-message-agent-v<版本号>.exe`。例如版本 `0.2.0` 会生成 `dist\chat-message-agent-v0.2.0.exe`，Windows 文件属性中的 `FileVersion` 和 `ProductVersion` 也会显示 `0.2.0`。配置、运行状态和日志不会打入 EXE。
 
 ## 常见问题
 

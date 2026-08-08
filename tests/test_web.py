@@ -23,8 +23,8 @@ def valid_payload(**changes):
         "scheduled_query_enabled": False,
         "target_group_ids": [],
         "log_group_message_content": False,
-        "query_interval_seconds": 30,
-        "initial_query_count": 20,
+        "query_interval_seconds": 60,
+        "initial_query_count": 2,
     }
     payload.update(changes)
     return payload
@@ -44,7 +44,10 @@ def test_page_and_health_are_local_assets(tmp_path):
 
 def test_get_and_put_config(tmp_path):
     client, manager = make_client(tmp_path)
-    assert client.get("/api/config").json["config"]["cli_prefix"] == "chat-cli"
+    default_config = client.get("/api/config").json["config"]
+    assert default_config["cli_prefix"] == "chat-cli"
+    assert default_config["query_interval_seconds"] == 60
+    assert default_config["initial_query_count"] == 2
     response = client.put(
         "/api/config",
         json=valid_payload(

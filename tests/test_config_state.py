@@ -15,8 +15,8 @@ def valid_config(**changes):
         "scheduled_query_enabled": False,
         "target_group_ids": [],
         "log_group_message_content": False,
-        "query_interval_seconds": 30,
-        "initial_query_count": 20,
+        "query_interval_seconds": 60,
+        "initial_query_count": 2,
     }
     value.update(changes)
     return value
@@ -25,7 +25,10 @@ def valid_config(**changes):
 def test_config_creates_defaults_and_preserves_unknown_fields(tmp_path):
     manager = ConfigManager(tmp_path)
     assert manager.load() == AppConfig()
-    assert json.loads(manager.path.read_text(encoding="utf-8"))["schema_version"] == 2
+    saved_defaults = json.loads(manager.path.read_text(encoding="utf-8"))
+    assert saved_defaults["schema_version"] == 2
+    assert saved_defaults["query_interval_seconds"] == 60
+    assert saved_defaults["initial_query_count"] == 2
     manager.save({**valid_config(), "future_option": {"enabled": True}})
     manager.save(valid_config(query_interval_seconds=60))
     saved = json.loads(manager.path.read_text(encoding="utf-8"))
