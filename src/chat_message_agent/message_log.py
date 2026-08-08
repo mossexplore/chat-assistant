@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
@@ -38,7 +38,7 @@ class FileMessageRecordWriter:
             message.msg_id,
             message.group_type,
             message.content_type,
-            message.server_send_time,
+            _format_server_send_time(message.server_send_time),
             message.group_id or group_id,
             message.sender,
             message.receiver,
@@ -64,3 +64,25 @@ def _escape_field(value: object) -> str:
         .replace("\r", "\\r")
         .replace("\n", "\\n")
     )
+
+
+def _format_server_send_time(value: object) -> str:
+    """Render CLI epoch timestamps as unambiguous UTC ISO 8601 values."""
+    if value is None or value == "":
+        return ""
+    if isinstance(value, bool):
+        return str(value)
+
+    try:
+        timestamp = float(value)
+        # The CLI normally returns milliseconds; accepting seconds keeps older
+        # or hand-crafted responses readable as well.
+        if abs(timestamp) >= 100_000_000_000:
+            timestamp /= 1000
+        return (
+            datetime.fromtimestamp(timestamp, UTC)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z")
+        )
+    except (OverflowError, OSError, TypeError, ValueError):
+        return str(value)

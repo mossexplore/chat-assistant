@@ -17,7 +17,7 @@ def test_full_message_log_uses_required_field_order_and_escaping(tmp_path):
             msg_id="101",
             group_type="2",
             content_type="text",
-            server_send_time=1723111111,
+            server_send_time=1786171481169,
             group_id="987654321",
             sender="alice",
             receiver="group",
@@ -26,7 +26,7 @@ def test_full_message_log_uses_required_field_order_and_escaping(tmp_path):
     )
     line = (tmp_path / "logs" / "messages.log").read_text(encoding="utf-8")
     assert line.startswith(
-        "2026-08-08T12:34:56.123+00:00|101|2|text|1723111111|"
+        "2026-08-08T12:34:56.123+00:00|101|2|text|2026-08-08T06:44:41.169Z|"
         "987654321|alice|group|"
     )
     assert "完整\\|消息\\n第二行\\\\末尾" in line
@@ -42,6 +42,19 @@ def test_full_message_log_uses_target_group_when_response_omits_group_id(tmp_pat
     writer.write("123456", ChatMessage(msg_id="1", content="hello"))
     fields = (tmp_path / "logs" / "messages.log").read_text(encoding="utf-8").split("|")
     assert fields[5] == "123456"
+
+
+def test_full_message_log_preserves_unrecognized_server_send_time(tmp_path):
+    writer = FileMessageRecordWriter(
+        tmp_path,
+        clock=lambda: datetime(2026, 8, 8, tzinfo=UTC),
+    )
+    writer.write(
+        "123456",
+        ChatMessage(msg_id="1", server_send_time="unknown", content="hello"),
+    )
+    fields = (tmp_path / "logs" / "messages.log").read_text(encoding="utf-8").split("|")
+    assert fields[4] == "unknown"
 
 
 def test_full_message_log_renders_quoted_reply_content(tmp_path):

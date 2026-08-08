@@ -35,7 +35,7 @@ python -m chat_message_agent
 
 “打印群组消息日志”默认关闭。开启后，每条成功交给处理器的消息会记录群组 ID、消息 ID 和消息内容；换行会转义，内容最多记录 4096 个字符。该开关保存后实时生效。日志可能包含敏感信息，只应在确有需要时开启。
 
-开启该开关后，程序还会将每条完整消息写入 `logs/messages.log`，格式为 `日志记录时间|msgId|groupType|contentType|serverSendTime|groupId|sender|receiver|content`。该专用文件中的 `content` 不截断；反斜杠、竖线、回车和换行分别进行反斜杠转义，保证每条消息占一行并可还原。专用日志写入失败时不会推进当前页游标，后续查询会重试，避免永久漏记。
+开启该开关后，程序还会将每条完整消息写入 `logs/messages.log`，格式为 `日志记录时间|msgId|groupType|contentType|serverSendTime|groupId|sender|receiver|content`。其中 `serverSendTime` 会从 CLI 返回的 Unix 毫秒时间戳转换为带毫秒精度的 UTC ISO 8601 标准时间（例如 `2026-08-08T06:44:41.169Z`）；无法识别时保留原值，避免丢失数据。该专用文件中的 `content` 不截断；反斜杠、竖线、回车和换行分别进行反斜杠转义，保证每条消息占一行并可还原。专用日志写入失败时不会推进当前页游标，后续查询会重试，避免永久漏记。
 
 对于引用回复类型的 `CARD_MSG`，日志不会直接写入卡片 JSON，而是从 `cardContext.replyMsg.content` 和 `cardContext.preMsg.content` 提取正文，按 `回复内容↩被引用内容` 记录。例如回复“好的”并引用“我知道了，这个就是那样的”时，日志内容为 `好的↩我知道了，这个就是那样的`。无法识别的卡片会安全保留原始内容。
 
