@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chat-message-agent"
+dynamic = ["version"]
+description = "Windows chat CLI message query agent"
+requires-python = ">=3.11"
+dependencies = ["Flask>=3.0,<4"]
+
+[project.scripts]
+chat-message-agent = "chat_message_agent.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+chat_message_agent = ["web/templates/*.html", "web/static/*.css", "web/static/*.js"]
+
+[tool.setuptools.dynamic]
+version = {attr = "chat_message_agent.version.__version__"}
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

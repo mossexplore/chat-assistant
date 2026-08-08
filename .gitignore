@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+.venv312/
+build/
+dist/
+*.spec.bak
+config.json
+runtime_state.json
+logs/

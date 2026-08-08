@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>聊天消息查询程序</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <p class="eyebrow">本机服务</p>
+          <h1>聊天消息查询程序</h1>
+          <p class="subtitle">配置聊天 CLI 和指定群组的增量消息查询。</p>
+        </div>
+        <div class="health"><span id="health-dot"></span><span id="health-text">正在连接…</span></div>
+      </header>
+
+      <section class="card" aria-labelledby="config-title">
+        <div class="section-heading">
+          <h2 id="config-title">运行配置</h2>
+          <span id="version">版本 —</span>
+        </div>
+        <div id="load-error" class="notice error" role="alert" hidden></div>
+        <form id="config-form" novalidate>
+          <label for="cli-prefix">消息命令前缀</label>
+          <input id="cli-prefix" name="cli_prefix" type="text" required autocomplete="off"
+                 aria-describedby="cli-prefix-help cli_prefix-error">
+          <small id="cli-prefix-help">填写可执行文件名或绝对路径，例如 chat-cli。</small>
+          <span class="field-error" id="cli_prefix-error"></span>
+
+          <div class="toggle-row">
+            <div>
+              <label for="scheduled-enabled">定时查询指定群组</label>
+              <small>启用后将立即查询一次，随后按周期执行。</small>
+            </div>
+            <input id="scheduled-enabled" name="scheduled_query_enabled" type="checkbox" role="switch">
+          </div>
+          <span class="field-error" id="scheduled_query_enabled-error"></span>
+
+          <label for="group-id">指定群组 ID</label>
+          <input id="group-id" name="target_group_id" type="text" inputmode="numeric" autocomplete="off"
+                 aria-describedby="target_group_id-error">
+          <span class="field-error" id="target_group_id-error"></span>
+
+          <div class="grid">
+            <div>
+              <label for="interval">定时执行周期（秒）</label>
+              <input id="interval" name="query_interval_seconds" type="number" min="5" max="86400" required>
+              <span class="field-error" id="query_interval_seconds-error"></span>
+            </div>
+            <div>
+              <label for="initial-count">首次查询条数</label>
+              <input id="initial-count" name="initial_query_count" type="number" min="1" max="100" required>
+              <span class="field-error" id="initial_query_count-error"></span>
+            </div>
+          </div>
+
+          <div id="feedback" class="notice" role="status" aria-live="polite" hidden></div>
+          <button id="save-button" type="submit">保存并立即生效</button>
+        </form>
+      </section>
+    </main>
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  </body>
+</html>
