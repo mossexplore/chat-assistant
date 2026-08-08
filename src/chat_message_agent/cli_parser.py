@@ -80,10 +80,18 @@ def parse_send_result(output: str) -> SendResult:
 def parse_history_result(output: str) -> HistoryQueryResult:
     status_code, body = parse_cli_output(output)
     result_code, context, data = _result_fields(body)
-    if not isinstance(data, dict) or "chatInfo" not in data:
-        raise CliOutputParseError("成功响应缺少 respData.chatInfo")
+    if not isinstance(data, dict):
+        raise CliOutputParseError("成功响应的 respData 必须是对象")
 
-    chat_info = data["chatInfo"]
+    total_count = _message_total_count(data)
+    if "chatInfo" not in data:
+        if total_count == 0:
+            chat_info: Any = []
+        else:
+            raise CliOutputParseError("有新消息的成功响应缺少 respData.chatInfo")
+    else:
+        chat_info = data["chatInfo"]
+
     if isinstance(chat_info, dict):
         for key in ("messages", "messageList", "chatInfoList", "list"):
             if isinstance(chat_info.get(key), list):
@@ -93,6 +101,10 @@ def parse_history_result(output: str) -> HistoryQueryResult:
         raise CliOutputParseError("respData.chatInfo 必须是消息列表")
 
     messages = tuple(_to_message(item) for item in chat_info if isinstance(item, dict))
+    if total_count is not None and total_count > 0 and not any(
+        message.msg_id for message in messages
+    ):
+        raise CliOutputParseError("msgTotalCount 大于 0，但响应中没有有效消息")
     ids = [message.msg_id for message in messages if message.msg_id]
     max_id = data.get("maxMsgId", data.get("max_message_id"))
     min_id = data.get("minMsgId", data.get("min_message_id"))
@@ -104,9 +116,22 @@ def parse_history_result(output: str) -> HistoryQueryResult:
         messages=messages,
         max_message_id=str(max_id) if max_id is not None else _max_id(ids),
         min_message_id=str(min_id) if min_id is not None else _min_id(ids),
-        total_count=_safe_int(data.get("totalCount", data.get("total_count")), len(messages)),
+        total_count=total_count if total_count is not None else len(messages),
         raw=body,
     )
+
+
+def _message_total_count(data: dict[str, Any]) -> int | None:
+    for key in ("msgTotalCount", "totalCount", "total_count"):
+        if key not in data:
+            continue
+        value = data[key]
+        if type(value) is int and value >= 0:
+            return value
+        if isinstance(value, str) and value.isdecimal():
+            return int(value)
+        raise CliOutputParseError(f"respData.{key} 必须是非负整数")
+    return None
 
 
 def _to_message(item: dict[str, Any]) -> ChatMessage:
@@ -137,10 +162,3 @@ def _max_id(values: list[str]) -> str | None:
 
 def _min_id(values: list[str]) -> str | None:
     return min(values, key=_id_key) if values else None
-
-
-def _safe_int(value: Any, default: int) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default

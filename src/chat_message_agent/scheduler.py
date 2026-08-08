@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from collections.abc import Callable
@@ -124,19 +125,20 @@ class QueryScheduler:
             self._running_query = True
             self._last_error = None
         try:
-            self.run_query_cycle(config)
-        except Exception as exc:
-            category = exc.category if isinstance(exc, CliError) else type(exc).__name__
-            exit_code = exc.exit_code if isinstance(exc, CliError) else None
-            LOGGER.error(
-                "event=history_query_failed group_id=%s error_category=%s exit_code=%s error=%s",
-                config.target_group_id,
-                category,
-                exit_code,
-                str(exc)[:500],
-            )
-            with self._status_lock:
-                self._last_error = str(exc)[:500]
+            for group_id in config.target_group_ids:
+                current = self.config_manager.snapshot()
+                if self._stopping.is_set() or not current.scheduled_query_enabled:
+                    break
+                if group_id not in current.target_group_ids:
+                    continue
+                try:
+                    self.run_group_query(config, group_id)
+                except Exception as exc:
+                    self._log_failure(group_id, exc)
+                    with self._status_lock:
+                        self._last_error = str(exc)[:500]
+        except Exception:
+            LOGGER.exception("event=query_cycle_unexpected_error")
         finally:
             with self._status_lock:
                 self._running_query = False
@@ -144,26 +146,27 @@ class QueryScheduler:
 
     def run_query_cycle(self, config: AppConfig | None = None) -> None:
         config = config or self.config_manager.snapshot()
-        if not config.target_group_id:
-            return
-        client = self.client_factory(config.cli_prefix)
-        cursor = self.state_store.get_cursor(config.target_group_id)
+        for group_id in config.target_group_ids:
+            self.run_group_query(config, group_id)
+
+    def run_group_query(self, config: AppConfig, group_id: str) -> None:
+        cursor = self.state_store.get_cursor(group_id)
         if cursor is None:
-            result = client.query_history_messages(
-                group_id=config.target_group_id,
+            result = self._client().query_history_messages(
+                group_id=group_id,
                 query_count=config.initial_query_count,
             )
             messages = self._ordered_unique(result.messages)
-            self._process(messages)
+            self._process(group_id, messages)
             new_cursor = result.max_message_id or self._max_message_id(messages)
             if new_cursor:
-                self.state_store.set_cursor(config.target_group_id, new_cursor)
-            self._log_complete(config.target_group_id, len(messages), "initial")
+                self.state_store.set_cursor(group_id, new_cursor)
+            self._log_complete(group_id, len(messages), "initial")
             return
 
         for _page_number in range(1, self.max_pages + 1):
-            result = client.query_history_messages(
-                group_id=config.target_group_id,
+            result = self._client().query_history_messages(
+                group_id=group_id,
                 query_count=config.initial_query_count,
                 message_id=cursor,
                 query_direction=1,
@@ -173,11 +176,11 @@ class QueryScheduler:
                 for item in self._ordered_unique(result.messages)
                 if item.msg_id and _is_after(item.msg_id, cursor)
             ]
-            self._process(messages)
+            self._process(group_id, messages)
             new_cursor = self._max_message_id(messages)
             if new_cursor:
-                self.state_store.set_cursor(config.target_group_id, new_cursor)
-            self._log_complete(config.target_group_id, len(messages), "incremental")
+                self.state_store.set_cursor(group_id, new_cursor)
+            self._log_complete(group_id, len(messages), "incremental")
 
             if len(result.messages) < config.initial_query_count or not new_cursor:
                 return
@@ -185,14 +188,17 @@ class QueryScheduler:
             current = self.config_manager.snapshot()
             if (
                 not current.scheduled_query_enabled
-                or current.target_group_id != config.target_group_id
+                or group_id not in current.target_group_ids
             ):
                 return
         LOGGER.error(
             "event=history_query_page_limit group_id=%s max_pages=%s",
-            config.target_group_id,
+            group_id,
             self.max_pages,
         )
+
+    def _client(self) -> ChatCliClient:
+        return self.client_factory(self.config_manager.snapshot().cli_prefix)
 
     @staticmethod
     def _ordered_unique(messages: tuple[ChatMessage, ...]) -> list[ChatMessage]:
@@ -202,9 +208,31 @@ class QueryScheduler:
                 unique[message.msg_id] = message
         return sorted(unique.values(), key=_message_key)
 
-    def _process(self, messages: list[ChatMessage]) -> None:
+    def _process(self, group_id: str, messages: list[ChatMessage]) -> None:
         for message in messages:
             self.processor.process(message)
+            if self.config_manager.snapshot().log_group_message_content:
+                content = message.content[:4096]
+                if len(message.content) > 4096:
+                    content += "…"
+                LOGGER.info(
+                    "event=group_message group_id=%s msg_id=%s content=%s",
+                    group_id,
+                    message.msg_id,
+                    json.dumps(content, ensure_ascii=False),
+                )
+
+    @staticmethod
+    def _log_failure(group_id: str, exc: Exception) -> None:
+        category = exc.category if isinstance(exc, CliError) else type(exc).__name__
+        exit_code = exc.exit_code if isinstance(exc, CliError) else None
+        LOGGER.error(
+            "event=history_query_failed group_id=%s error_category=%s exit_code=%s error=%s",
+            group_id,
+            category,
+            exit_code,
+            str(exc)[:500],
+        )
 
     @staticmethod
     def _max_message_id(messages: list[ChatMessage]) -> str | None:

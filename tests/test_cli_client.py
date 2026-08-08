@@ -120,6 +120,38 @@ def test_subprocess_runner_maps_nonzero_exit(monkeypatch):
     assert "失败" in str(caught.value)
 
 
+def test_subprocess_runner_logs_success_elapsed_seconds(monkeypatch, caplog):
+    completed = subprocess.CompletedProcess(
+        ["chat-cli"], 0, b'{"resultCode":"0"}', b""
+    )
+    timestamps = iter((10.0, 11.2345))
+    monkeypatch.setattr(subprocess, "run", lambda *_args, **_kwargs: completed)
+    monkeypatch.setattr(
+        "chat_message_agent.cli_client.time.perf_counter", lambda: next(timestamps)
+    )
+    with caplog.at_level("INFO"):
+        SubprocessRunner().run(["chat-cli", "im", "query-history-message"], 30)
+    assert "operation=query-history-message success=true" in caplog.text
+    assert "elapsed_seconds=1.235" in caplog.text
+    assert "exit_code=0" in caplog.text
+
+
+def test_subprocess_runner_logs_timeout_elapsed_seconds(monkeypatch, caplog):
+    def timeout(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired("chat-cli", 30)
+
+    timestamps = iter((20.0, 50.25))
+    monkeypatch.setattr(subprocess, "run", timeout)
+    monkeypatch.setattr(
+        "chat_message_agent.cli_client.time.perf_counter", lambda: next(timestamps)
+    )
+    with caplog.at_level("ERROR"), pytest.raises(CliTimeoutError):
+        SubprocessRunner().run(["chat-cli", "im", "send-to-group"], 30)
+    assert "operation=send-to-group success=false" in caplog.text
+    assert "elapsed_seconds=30.250" in caplog.text
+    assert "error_category=cli_timeout" in caplog.text
+
+
 def test_decode_falls_back_to_system_encoding(monkeypatch):
     monkeypatch.setattr(
         "chat_message_agent.cli_client.locale.getpreferredencoding", lambda _: "latin1"

@@ -20,8 +20,9 @@ h2 { margin: 0; font-size: 20px; }
 #version { color: #738098; font-size: 13px; }
 form { display: flex; flex-direction: column; }
 label { margin: 16px 0 7px; font-weight: 650; }
-input[type="text"], input[type="number"] { width: 100%; padding: 11px 12px; border: 1px solid #bdc8da; border-radius: 8px; background: #fff; color: inherit; font: inherit; }
-input:focus-visible, button:focus-visible { outline: 3px solid #9bb6ff; outline-offset: 2px; border-color: #3b63db; }
+input[type="text"], input[type="number"], textarea { width: 100%; padding: 11px 12px; border: 1px solid #bdc8da; border-radius: 8px; background: #fff; color: inherit; font: inherit; }
+textarea { resize: vertical; line-height: 1.5; }
+input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px solid #9bb6ff; outline-offset: 2px; border-color: #3b63db; }
 small { color: #687790; line-height: 1.5; }
 .field-error { min-height: 18px; padding-top: 4px; color: #bd2c3a; font-size: 13px; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 10px; }

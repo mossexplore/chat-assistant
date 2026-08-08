@@ -18,12 +18,13 @@ def make_client(tmp_path):
 
 def valid_payload(**changes):
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "cli_prefix": "chat-cli",
         "scheduled_query_enabled": False,
-        "target_group_id": "",
-        "query_interval_seconds": 30,
-        "initial_query_count": 20,
+        "target_group_ids": [],
+        "log_group_message_content": False,
+        "query_interval_seconds": 60,
+        "initial_query_count": 2,
     }
     payload.update(changes)
     return payload
@@ -33,27 +34,42 @@ def test_page_and_health_are_local_assets(tmp_path):
     client, _ = make_client(tmp_path)
     response = client.get("/")
     assert response.status_code == 200
-    assert "聊天消息查询程序" in response.get_data(as_text=True)
+    page = response.get_data(as_text=True)
+    assert "聊天消息查询程序" in page
+    assert 'name="target_group_ids"' in page
+    assert "打印群组消息日志" in page
     assert "Content-Security-Policy" in response.headers
     assert client.get("/api/health").json["status"] == "ok"
 
 
 def test_get_and_put_config(tmp_path):
     client, manager = make_client(tmp_path)
-    assert client.get("/api/config").json["config"]["cli_prefix"] == "chat-cli"
-    response = client.put("/api/config", json=valid_payload(query_interval_seconds=55))
+    default_config = client.get("/api/config").json["config"]
+    assert default_config["cli_prefix"] == "chat-cli"
+    assert default_config["query_interval_seconds"] == 60
+    assert default_config["initial_query_count"] == 2
+    response = client.put(
+        "/api/config",
+        json=valid_payload(
+            target_group_ids=["123", "456"],
+            log_group_message_content=True,
+            query_interval_seconds=55,
+        ),
+    )
     assert response.status_code == 200
     assert manager.snapshot().query_interval_seconds == 55
+    assert manager.snapshot().target_group_ids == ("123", "456")
+    assert manager.snapshot().log_group_message_content is True
 
 
 def test_put_config_returns_field_errors(tmp_path):
     client, _ = make_client(tmp_path)
     response = client.put(
         "/api/config",
-        json=valid_payload(scheduled_query_enabled=True, target_group_id="not-number"),
+        json=valid_payload(scheduled_query_enabled=True, target_group_ids=["not-number"]),
     )
     assert response.status_code == 400
-    assert "target_group_id" in response.json["fields"]
+    assert "target_group_ids" in response.json["fields"]
 
 
 def test_put_requires_json(tmp_path):

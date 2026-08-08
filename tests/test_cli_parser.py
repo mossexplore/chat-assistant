@@ -52,6 +52,40 @@ def test_parse_history_models_and_defaults():
     assert result.messages[0].at_account_list == ("alice",)
 
 
+def test_parse_history_success_without_new_messages_or_chat_info():
+    result = parse_history_result(
+        json.dumps(
+            {
+                "respData": {
+                    "maxMsgId": 0,
+                    "minMsgId": 0,
+                    "msgTotalCount": 0,
+                },
+                "resultCode": "0",
+                "resultContext": "Operate Success",
+                "sno": None,
+            }
+        )
+    )
+    assert result.success
+    assert result.messages == ()
+    assert result.total_count == 0
+    assert result.max_message_id == "0"
+    assert result.min_message_id == "0"
+
+
+def test_parse_history_requires_messages_when_total_count_is_positive():
+    output = json.dumps(
+        {
+            "respData": {"maxMsgId": 10, "minMsgId": 10, "msgTotalCount": 1},
+            "resultCode": "0",
+            "resultContext": "Operate Success",
+        }
+    )
+    with pytest.raises(CliOutputParseError, match="缺少 respData.chatInfo"):
+        parse_history_result(output)
+
+
 @pytest.mark.parametrize(
     "output,error_type",
     [
