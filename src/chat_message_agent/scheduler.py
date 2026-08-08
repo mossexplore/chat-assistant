@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from .cli_client import ChatCliClient
 from .config import AppConfig, ConfigManager
 from .errors import CliError
+from .message_content import content_for_logging
 from .message_log import MessageRecordWriter, NoOpMessageRecordWriter
 from .models import ChatMessage
 from .processor import MessageProcessor
@@ -216,8 +217,9 @@ class QueryScheduler:
             self.processor.process(message)
             if self.config_manager.snapshot().log_group_message_content:
                 self.message_record_writer.write(group_id, message)
-                content = message.content[:4096]
-                if len(message.content) > 4096:
+                log_content = content_for_logging(message)
+                content = log_content[:4096]
+                if len(log_content) > 4096:
                     content += "…"
                 LOGGER.info(
                     "event=group_message group_id=%s msg_id=%s content=%s",
