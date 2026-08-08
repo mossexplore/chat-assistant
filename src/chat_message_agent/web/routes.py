@@ -1,12 +1,28 @@
 from __future__ import annotations
 
+import logging
+
 from flask import Flask, jsonify, render_template, request
 from werkzeug.exceptions import BadRequest
 
 from ..config import ConfigManager
 from ..errors import PersistenceError, ValidationError
+from ..logging_setup import OPERATIONS_LOGGER_NAME
 from ..scheduler import QueryScheduler
 from ..version import __version__
+
+OPERATIONS_LOGGER = logging.getLogger(OPERATIONS_LOGGER_NAME)
+CONFIG_FIELDS = frozenset(
+    {
+        "schema_version",
+        "cli_prefix",
+        "scheduled_query_enabled",
+        "target_group_ids",
+        "log_group_message_content",
+        "query_interval_seconds",
+        "initial_query_count",
+    }
+)
 
 
 def create_web_app(config_manager: ConfigManager, scheduler: QueryScheduler) -> Flask:
@@ -45,19 +61,41 @@ def create_web_app(config_manager: ConfigManager, scheduler: QueryScheduler) -> 
     @app.put("/api/config")
     def put_config():
         if not request.is_json:
+            OPERATIONS_LOGGER.warning("config_update_rejected reason=content_type")
             return jsonify(error="请求必须使用 application/json", fields={}), 415
+        before = config_manager.as_dict()
         try:
             raw = request.get_json(silent=False)
             config_manager.save(raw)
         except BadRequest:
+            OPERATIONS_LOGGER.warning("config_update_rejected reason=malformed_json")
             return jsonify(error="请求 JSON 格式无效", fields={}), 400
         except ValidationError as exc:
+            fields = ",".join(sorted(exc.errors)) or "request"
+            OPERATIONS_LOGGER.warning(
+                "config_update_rejected reason=validation fields=%s",
+                fields,
+            )
             return jsonify(error=str(exc), fields=exc.errors), 400
         except PersistenceError as exc:
+            OPERATIONS_LOGGER.error(
+                "config_update_failed error_category=persistence error=%s",
+                str(exc)[:300].replace("\r", " ").replace("\n", " "),
+            )
             return jsonify(error=f"配置保存失败：{exc}", fields={}), 500
         except Exception:
-            app.logger.exception("event=config_save_unexpected_error")
+            OPERATIONS_LOGGER.exception(
+                "config_update_failed error_category=unexpected"
+            )
             return jsonify(error="配置保存失败，请查看日志", fields={}), 500
-        return jsonify(success=True, config=config_manager.as_dict(), message="配置已保存并生效")
+        current = config_manager.as_dict()
+        changed_fields = ",".join(
+            sorted(field for field in CONFIG_FIELDS if before.get(field) != current.get(field))
+        )
+        OPERATIONS_LOGGER.info(
+            "config_updated changed_fields=%s",
+            changed_fields or "none",
+        )
+        return jsonify(success=True, config=current, message="配置已保存并生效")
 
     return app

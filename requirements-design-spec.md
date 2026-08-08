@@ -330,6 +330,9 @@ class MessageProcessor(Protocol):
 14. `messages.log` 的消息正文不得截断；反斜杠、字段分隔符、回车和换行必须转义，以保证单条记录不跨行且字段可还原。
 15. `messages.log` 写入失败时不得推进当前页游标，确保后续查询能够重试该消息。
 16. 引用回复类型 `CARD_MSG` 的日志正文必须解析为 `cardContext.replyMsg.content + "↩" + cardContext.preMsg.content`；解析失败或结构不匹配时回退原始 `content`。
+17. 新增独立轮转文件 `logs/operations.log`，记录程序启动、停止以及 Web 页面配置修改的成功、拒绝和失败操作；这些记录不得重复写入 `app.log`。
+18. 启动记录至少包含程序版本和本地 Web 地址；配置修改成功记录发生变化的配置项名称，校验失败记录错误字段名称，持久化或未知异常记录错误类别。
+19. `operations.log` 不得记录 CLI 路径、群组 ID 等配置值或完整请求体；单文件大小与保留数量沿用 `app.log` 的 10 MB、5 份轮转策略。
 
 ### FR-014 CLI 结果与错误模型
 
