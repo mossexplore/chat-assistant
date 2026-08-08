@@ -311,20 +311,20 @@ class MessageProcessor(Protocol):
 
 1. 日志同时输出到控制台和 EXE 所在目录的 `logs/app.log`。
 2. 日志至少包含时间、级别、模块/事件和正文。
-3. 每次初始化查询或定时查询必须输出一条汇总日志，格式至少包含群组 ID 与查询消息条数，例如：
+3. 每次初始化查询或定时查询成功后必须由 `cliclient` 输出一条汇总日志，将群组 ID、CLI 返回的消息条数与耗时合并为一行，例如：
 
    ```text
-   INFO event=history_query_completed group_id=987432812330259203 message_count=1
+   2026-08-08 15:07:32,121 - INFO - cliclient - [987432812330259203] count=2 elapsed_seconds=8.092
    ```
 
 4. 查询失败日志包含群组 ID、错误类别、CLI 退出码（如有）及可安全展示的错误摘要。
 5. 不在日志中输出完整文件内容、潜在敏感配置或无长度限制的 CLI 原始输出。
 6. 建议使用按大小轮转日志，例如单文件 10 MB、保留 5 个历史文件。
 7. 日志写入失败不得导致核心进程退出，但应尽可能在控制台报告。
-8. `log_group_message_content` 关闭时不得输出消息正文；开启时逐条输出群组 ID、消息 ID 和经过换行转义的消息正文，正文最多记录 4096 个字符。
+8. `log_group_message_content` 关闭时不得输出消息正文；开启时由 `scheduler` 按 `[group_id] sender ➔ content` 逐条输出群组 ID、发送者和经过换行转义的消息正文，正文最多记录 4096 个字符。
 9. 日志开关通过配置变更通知实时生效，正在处理的一页消息从下一条消息开始读取最新开关值。
-10. 每次聊天 CLI 调用完成或失败时记录 `event=cli_command_completed`，并包含操作名、成功状态及以秒为单位的 `elapsed_seconds`；失败时同时记录错误类别和可用的退出码。
-11. CLI 耗时日志不得输出消息文本、接收者、群组 ID、附件路径等命令参数。
+10. 历史查询的消息数量和以秒为单位的 `elapsed_seconds` 必须在同一条成功日志中输出，不得再输出重复的查询完成日志；失败时记录操作名、耗时、错误类别和可用的退出码。
+11. CLI 日志不得输出消息文本、接收者、附件路径等敏感命令参数；历史查询成功日志仅额外输出目标群组 ID。
 12. 新增独立文件 `logs/messages.log`；当 `log_group_message_content` 开启时，每条成功处理的完整消息按 `日志记录时间|msgId|groupType|contentType|serverSendTime|groupId|sender|receiver|content` 写入一行。
 13. `messages.log` 中的 `serverSendTime` 将 CLI 返回的 Unix 毫秒时间戳转换为带毫秒精度和 `Z` 后缀的 UTC ISO 8601 标准时间；无法识别的值保留原文。
 14. `messages.log` 的消息正文不得截断；反斜杠、字段分隔符、回车和换行必须转义，以保证单条记录不跨行且字段可还原。

@@ -12,7 +12,13 @@ from chat_message_agent.state import StateStore
 
 def result(ids, *, max_id=None):
     messages = tuple(
-        ChatMessage(msg_id=str(value), server_send_time=0, content=str(value)) for value in ids
+        ChatMessage(
+            msg_id=str(value),
+            server_send_time=0,
+            sender="a123456",
+            content=str(value),
+        )
+        for value in ids
     )
     return HistoryQueryResult(
         success=True,
@@ -180,7 +186,7 @@ def test_message_content_logging_switch_takes_effect_without_restart(tmp_path, c
     state.set_cursor("999", "10")
     with caplog.at_level("INFO"):
         scheduler.run_query_cycle(config)
-    assert "event=group_message" not in caplog.text
+    assert "➔" not in caplog.text
     assert message_records.records == []
 
     scheduler.config_manager.save(
@@ -197,7 +203,9 @@ def test_message_content_logging_switch_takes_effect_without_restart(tmp_path, c
     caplog.clear()
     with caplog.at_level("INFO"):
         scheduler.run_query_cycle(scheduler.config_manager.snapshot())
-    assert 'event=group_message group_id=999 msg_id=12 content="12"' in caplog.text
+    assert "[999] a123456 ➔ 12" in caplog.text
+    record = next(record for record in caplog.records if "➔" in record.getMessage())
+    assert record.name == "scheduler"
     assert message_records.records == [("999", "12", "12")]
 
 

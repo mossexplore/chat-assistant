@@ -5,9 +5,11 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+LOG_FORMAT = "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
+
 
 def setup_logging(data_dir: Path) -> None:
-    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    formatter = logging.Formatter(LOG_FORMAT)
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.handlers.clear()
