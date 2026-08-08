@@ -22,7 +22,8 @@ python -m chat_message_agent
 
 - `config.json`：用户配置；
 - `runtime_state.json`：各群组消息游标；
-- `logs/app.log`：轮转日志，单文件 10 MB、保留 5 份。
+- `logs/app.log`：程序运行日志，单文件 10 MB、保留 5 份；
+- `logs/operations.log`：程序启动、停止及 Web 配置修改操作日志，单文件 10 MB、保留 5 份；
 - `logs/messages.log`：开启“打印群组消息日志”后写入的完整消息记录。
 
 请把免安装程序放在普通用户可写目录，不要放入受保护的 `Program Files`。配置损坏时程序保留原文件、用默认配置启动，并在页面显示错误；游标只在整页消息成功处理后推进。
@@ -40,6 +41,8 @@ python -m chat_message_agent
 对于引用回复类型的 `CARD_MSG`，日志不会直接写入卡片 JSON，而是从 `cardContext.replyMsg.content` 和 `cardContext.preMsg.content` 提取正文，按 `回复内容↩被引用内容` 记录。例如回复“好的”并引用“我知道了，这个就是那样的”时，日志内容为 `好的↩我知道了，这个就是那样的`。无法识别的卡片会安全保留原始内容。
 
 每次历史查询成功后，`app.log` 将群组 ID、CLI 返回的消息数量和执行耗时合并为一行，例如 `[987432812330259203] count=2 elapsed_seconds=8.092`。耗时单位为秒并保留三位小数，不再另外打印重复的查询完成日志；失败时仍记录错误类别和退出码等必要诊断信息。
+
+程序启动、停止以及通过 Web 页面修改配置的结果单独写入 `logs/operations.log`，不重复写入 `app.log`。配置操作只记录成功、拒绝或失败状态及发生变化的配置项名称，不记录配置值。
 
 历史查询以 `resultCode == "0"` 判断 CLI 业务执行成功，并以 `msgTotalCount` 判断是否返回了新消息。当 `msgTotalCount` 为 0 时，CLI 可以省略 `chatInfo`，程序会将其解析为正常的空结果。
 

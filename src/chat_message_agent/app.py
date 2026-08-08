@@ -10,14 +10,16 @@ from pathlib import Path
 from werkzeug.serving import BaseWSGIServer, make_server
 
 from .config import ConfigManager
-from .logging_setup import setup_logging
+from .logging_setup import OPERATIONS_LOGGER_NAME, setup_logging
 from .message_log import FileMessageRecordWriter
 from .processor import NoOpMessageProcessor
 from .scheduler import QueryScheduler
 from .state import StateStore
+from .version import __version__
 from .web.routes import create_web_app
 
 LOGGER = logging.getLogger(__name__)
+OPERATIONS_LOGGER = logging.getLogger(OPERATIONS_LOGGER_NAME)
 
 
 def default_data_dir() -> Path:
@@ -38,14 +40,19 @@ class Application:
         self.scheduler.start()
         if open_browser:
             threading.Timer(0.35, self._open_browser).start()
-        LOGGER.info("event=web_started url=%s", self.url)
+        OPERATIONS_LOGGER.info(
+            "application_started version=%s url=%s",
+            __version__,
+            self.url,
+        )
         try:
             self.server.serve_forever()
         except KeyboardInterrupt:
-            LOGGER.info("event=shutdown_requested")
+            OPERATIONS_LOGGER.info("shutdown_requested")
         finally:
             self.scheduler.stop()
             self.server.server_close()
+            OPERATIONS_LOGGER.info("application_stopped")
 
     def _open_browser(self) -> None:
         try:

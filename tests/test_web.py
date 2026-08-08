@@ -1,3 +1,5 @@
+import logging
+
 from chat_message_agent.config import ConfigManager
 from chat_message_agent.processor import NoOpMessageProcessor
 from chat_message_agent.scheduler import QueryScheduler
@@ -42,34 +44,44 @@ def test_page_and_health_are_local_assets(tmp_path):
     assert client.get("/api/health").json["status"] == "ok"
 
 
-def test_get_and_put_config(tmp_path):
+def test_get_and_put_config(tmp_path, caplog):
     client, manager = make_client(tmp_path)
     default_config = client.get("/api/config").json["config"]
     assert default_config["cli_prefix"] == "chat-cli"
     assert default_config["query_interval_seconds"] == 60
     assert default_config["initial_query_count"] == 2
-    response = client.put(
-        "/api/config",
-        json=valid_payload(
-            target_group_ids=["123", "456"],
-            log_group_message_content=True,
-            query_interval_seconds=55,
-        ),
-    )
+    with caplog.at_level(logging.INFO, logger="operations"):
+        response = client.put(
+            "/api/config",
+            json=valid_payload(
+                target_group_ids=["123", "456"],
+                log_group_message_content=True,
+                query_interval_seconds=55,
+            ),
+        )
     assert response.status_code == 200
     assert manager.snapshot().query_interval_seconds == 55
     assert manager.snapshot().target_group_ids == ("123", "456")
     assert manager.snapshot().log_group_message_content is True
+    assert (
+        "config_updated changed_fields="
+        "log_group_message_content,query_interval_seconds,target_group_ids"
+    ) in caplog.text
 
 
-def test_put_config_returns_field_errors(tmp_path):
+def test_put_config_returns_field_errors(tmp_path, caplog):
     client, _ = make_client(tmp_path)
-    response = client.put(
-        "/api/config",
-        json=valid_payload(scheduled_query_enabled=True, target_group_ids=["not-number"]),
-    )
+    with caplog.at_level(logging.WARNING, logger="operations"):
+        response = client.put(
+            "/api/config",
+            json=valid_payload(
+                scheduled_query_enabled=True,
+                target_group_ids=["not-number"],
+            ),
+        )
     assert response.status_code == 400
     assert "target_group_ids" in response.json["fields"]
+    assert "config_update_rejected reason=validation fields=target_group_ids" in caplog.text
 
 
 def test_put_requires_json(tmp_path):
