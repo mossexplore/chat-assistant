@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .errors import PersistenceError
+from .message_content import content_for_logging
 from .models import ChatMessage
 
 
@@ -41,7 +42,7 @@ class FileMessageRecordWriter:
             message.group_id or group_id,
             message.sender,
             message.receiver,
-            message.content,
+            content_for_logging(message),
         )
         line = "|".join(_escape_field(value) for value in fields) + "\n"
         try:

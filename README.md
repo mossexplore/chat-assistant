@@ -37,6 +37,8 @@ python -m chat_message_agent
 
 开启该开关后，程序还会将每条完整消息写入 `logs/messages.log`，格式为 `日志记录时间|msgId|groupType|contentType|serverSendTime|groupId|sender|receiver|content`。该专用文件中的 `content` 不截断；反斜杠、竖线、回车和换行分别进行反斜杠转义，保证每条消息占一行并可还原。专用日志写入失败时不会推进当前页游标，后续查询会重试，避免永久漏记。
 
+对于引用回复类型的 `CARD_MSG`，日志不会直接写入卡片 JSON，而是从 `cardContext.replyMsg.content` 和 `cardContext.preMsg.content` 提取正文，按 `回复内容↩被引用内容` 记录。例如回复“好的”并引用“我知道了，这个就是那样的”时，日志内容为 `好的↩我知道了，这个就是那样的`。无法识别的卡片会安全保留原始内容。
+
 每次实际执行聊天 CLI 后都会输出 `event=cli_command_completed` 结构化日志，其中包含操作名、成功状态、退出码或错误类别，以及以秒为单位、保留三位小数的 `elapsed_seconds`。日志不会输出消息文本、接收者、群组 ID、附件路径等 CLI 参数。
 
 历史查询以 `resultCode == "0"` 判断 CLI 业务执行成功，并以 `msgTotalCount` 判断是否返回了新消息。当 `msgTotalCount` 为 0 时，CLI 可以省略 `chatInfo`，程序会将其解析为正常的空结果。
