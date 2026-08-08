@@ -11,6 +11,7 @@ from werkzeug.serving import BaseWSGIServer, make_server
 
 from .config import ConfigManager
 from .logging_setup import setup_logging
+from .message_log import FileMessageRecordWriter
 from .processor import NoOpMessageProcessor
 from .scheduler import QueryScheduler
 from .state import StateStore
@@ -61,7 +62,12 @@ def build_application(*, data_dir: Path | None = None, port: int = 8765) -> Appl
     config_manager.load()
     state_store = StateStore(data_dir)
     state_store.load()
-    scheduler = QueryScheduler(config_manager, state_store, NoOpMessageProcessor())
+    scheduler = QueryScheduler(
+        config_manager,
+        state_store,
+        NoOpMessageProcessor(),
+        message_record_writer=FileMessageRecordWriter(data_dir),
+    )
     flask_app = create_web_app(config_manager, scheduler)
     try:
         server = make_server("127.0.0.1", port, flask_app, threaded=True)

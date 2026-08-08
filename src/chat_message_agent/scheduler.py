@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from .cli_client import ChatCliClient
 from .config import AppConfig, ConfigManager
 from .errors import CliError
+from .message_log import MessageRecordWriter, NoOpMessageRecordWriter
 from .models import ChatMessage
 from .processor import MessageProcessor
 from .state import StateStore
@@ -37,12 +38,14 @@ class QueryScheduler:
         processor: MessageProcessor,
         *,
         client_factory: Callable[[str], ChatCliClient] = ChatCliClient,
+        message_record_writer: MessageRecordWriter | None = None,
         max_pages: int = 100,
     ) -> None:
         self.config_manager = config_manager
         self.state_store = state_store
         self.processor = processor
         self.client_factory = client_factory
+        self.message_record_writer = message_record_writer or NoOpMessageRecordWriter()
         self.max_pages = max_pages
         self._changed = threading.Event()
         self._stopping = threading.Event()
@@ -212,6 +215,7 @@ class QueryScheduler:
         for message in messages:
             self.processor.process(message)
             if self.config_manager.snapshot().log_group_message_content:
+                self.message_record_writer.write(group_id, message)
                 content = message.content[:4096]
                 if len(message.content) > 4096:
                     content += "…"

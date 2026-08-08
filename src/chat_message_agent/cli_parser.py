@@ -141,6 +141,7 @@ def _to_message(item: dict[str, Any]) -> ChatMessage:
     return ChatMessage(
         msg_id=str(item.get("msgId", item.get("messageId", item.get("msg_id", "")))),
         content=str(item.get("content", "")),
+        group_type=str(item.get("groupType", item.get("group_type", ""))),
         content_type=str(item.get("contentType", item.get("content_type", ""))),
         sender=str(item.get("sender", item.get("senderAccount", ""))),
         receiver=str(item.get("receiver", item.get("receiverAccount", ""))),

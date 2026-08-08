@@ -325,6 +325,9 @@ class MessageProcessor(Protocol):
 9. 日志开关通过配置变更通知实时生效，正在处理的一页消息从下一条消息开始读取最新开关值。
 10. 每次聊天 CLI 调用完成或失败时记录 `event=cli_command_completed`，并包含操作名、成功状态及以秒为单位的 `elapsed_seconds`；失败时同时记录错误类别和可用的退出码。
 11. CLI 耗时日志不得输出消息文本、接收者、群组 ID、附件路径等命令参数。
+12. 新增独立文件 `logs/messages.log`；当 `log_group_message_content` 开启时，每条成功处理的完整消息按 `日志记录时间|msgId|groupType|contentType|serverSendTime|groupId|sender|receiver|content` 写入一行。
+13. `messages.log` 的消息正文不得截断；反斜杠、字段分隔符、回车和换行必须转义，以保证单条记录不跨行且字段可还原。
+14. `messages.log` 写入失败时不得推进当前页游标，确保后续查询能够重试该消息。
 
 ### FR-014 CLI 结果与错误模型
 
