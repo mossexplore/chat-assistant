@@ -68,3 +68,13 @@ class StateStore:
             }
             atomic_write_json(self.path, new_state)
             self._state = new_state
+
+    def clear_cursor(self, group_id: str) -> None:
+        with self._lock:
+            if group_id not in self._state["group_cursors"]:
+                return
+            cursors = dict(self._state["group_cursors"])
+            cursors.pop(group_id)
+            new_state = {"schema_version": 1, "group_cursors": cursors}
+            atomic_write_json(self.path, new_state)
+            self._state = new_state

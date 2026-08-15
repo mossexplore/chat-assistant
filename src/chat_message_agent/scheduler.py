@@ -54,6 +54,7 @@ class QueryScheduler:
         self._last_query_at: str | None = None
         self._last_error: str | None = None
         self._running_query = False
+        self._initialized_groups: set[str] = set()
         self.config_manager.subscribe(self.notify_config_changed)
 
     def start(self) -> None:
@@ -153,17 +154,14 @@ class QueryScheduler:
             self.run_group_query(config, group_id)
 
     def run_group_query(self, config: AppConfig, group_id: str) -> None:
+        if group_id not in self._initialized_groups:
+            self._run_initial_query(config, group_id)
+            self._initialized_groups.add(group_id)
+            return
+
         cursor = self.state_store.get_cursor(group_id)
         if cursor is None:
-            result = self._client().query_history_messages(
-                group_id=group_id,
-                query_count=config.initial_query_count,
-            )
-            messages = self._ordered_unique(result.messages)
-            self._process(group_id, messages)
-            new_cursor = result.max_message_id or self._max_message_id(messages)
-            if new_cursor:
-                self.state_store.set_cursor(group_id, new_cursor)
+            self._run_initial_query(config, group_id)
             return
 
         for _page_number in range(1, self.max_pages + 1):
@@ -196,6 +194,21 @@ class QueryScheduler:
             group_id,
             self.max_pages,
         )
+
+    def _run_initial_query(self, config: AppConfig, group_id: str) -> None:
+        result = self._client().query_history_messages(
+            group_id=group_id,
+            query_count=config.initial_query_count,
+        )
+        messages = self._ordered_unique(result.messages)
+        self._process(group_id, messages)
+        new_cursor = result.max_message_id
+        if not new_cursor or new_cursor == "0":
+            new_cursor = self._max_message_id(messages)
+        if new_cursor:
+            self.state_store.set_cursor(group_id, new_cursor)
+        else:
+            self.state_store.clear_cursor(group_id)
 
     def _client(self) -> ChatCliClient:
         return self.client_factory(self.config_manager.snapshot().cli_prefix)
