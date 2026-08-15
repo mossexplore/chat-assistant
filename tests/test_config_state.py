@@ -112,6 +112,20 @@ def test_state_stores_independent_string_cursors(tmp_path):
     assert restored.get_cursor("200") == "7"
 
 
+def test_state_can_clear_one_group_cursor(tmp_path):
+    state = StateStore(tmp_path)
+    state.load()
+    state.set_cursor("100", "10")
+    state.set_cursor("200", "20")
+
+    state.clear_cursor("100")
+
+    restored = StateStore(tmp_path)
+    restored.load()
+    assert restored.get_cursor("100") is None
+    assert restored.get_cursor("200") == "20"
+
+
 def test_damaged_state_recovers_on_next_write(tmp_path):
     (tmp_path / "runtime_state.json").write_text("[]", encoding="utf-8")
     state = StateStore(tmp_path)

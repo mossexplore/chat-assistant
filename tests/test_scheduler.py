@@ -114,16 +114,51 @@ def test_initial_query_sorts_deduplicates_and_saves_cursor(tmp_path):
     assert client.calls == [{"group_id": "999", "query_count": 10}]
 
 
+def test_first_query_after_restart_ignores_persisted_cursor(tmp_path):
+    client = FakeClient([result([98, 99], max_id="99")])
+    scheduler, state, config = make_scheduler(tmp_path, client, count=2)
+    state.set_cursor("999", "10")
+
+    scheduler.run_query_cycle(config)
+
+    assert client.calls == [{"group_id": "999", "query_count": 2}]
+    assert state.get_cursor("999") == "99"
+
+
+def test_empty_startup_query_clears_stale_cursor_and_keeps_querying_latest(tmp_path):
+    client = FakeClient([result([], max_id="0"), result([50], max_id="50")])
+    scheduler, state, config = make_scheduler(tmp_path, client, count=2)
+    state.set_cursor("999", "10")
+
+    scheduler.run_query_cycle(config)
+    assert state.get_cursor("999") is None
+    scheduler.run_query_cycle(config)
+
+    assert client.calls == [
+        {"group_id": "999", "query_count": 2},
+        {"group_id": "999", "query_count": 2},
+    ]
+    assert state.get_cursor("999") == "50"
+
+
 def test_incremental_query_filters_cursor_and_paginates(tmp_path):
-    client = FakeClient([result([10, 11]), result([11, 12]), result([])])
+    client = FakeClient(
+        [
+            result([10], max_id="10"),
+            result([10, 11]),
+            result([11, 12]),
+            result([]),
+        ]
+    )
     collector = Collector()
     scheduler, state, config = make_scheduler(tmp_path, client, collector, count=2)
-    state.set_cursor("999", "10")
     scheduler.run_query_cycle(config)
-    assert collector.ids == ["11", "12"]
+    scheduler.run_query_cycle(config)
+    assert collector.ids == ["10", "11", "12"]
     assert state.get_cursor("999") == "12"
-    assert all(call["query_direction"] == 1 for call in client.calls)
-    assert [call["message_id"] for call in client.calls] == ["10", "11", "12"]
+    assert "message_id" not in client.calls[0]
+    assert all(call["query_direction"] == 1 for call in client.calls[1:])
+    assert [call["message_id"] for call in client.calls[1:]] == ["10", "11", "12"]
 
 
 def test_processor_failure_does_not_advance_page_cursor(tmp_path):
@@ -136,21 +171,22 @@ def test_processor_failure_does_not_advance_page_cursor(tmp_path):
 
 
 def test_page_limit_stops_infinite_full_pages(tmp_path):
-    client = FakeClient([result([11]), result([12])])
+    client = FakeClient([result([10], max_id="10"), result([11]), result([12])])
     scheduler, state, config = make_scheduler(tmp_path, client, count=1, max_pages=2)
-    state.set_cursor("999", "10")
     scheduler.run_query_cycle(config)
-    assert len(client.calls) == 2
+    scheduler.run_query_cycle(config)
+    assert len(client.calls) == 3
     assert state.get_cursor("999") == "12"
 
 
-def test_group_switch_uses_independent_cursor(tmp_path):
-    client = FakeClient([result([], max_id=None)])
+def test_new_group_uses_latest_query_even_when_it_has_a_persisted_cursor(tmp_path):
+    client = FakeClient([result([30], max_id="30")])
     scheduler, state, config = make_scheduler(tmp_path, client)
     state.set_cursor("999", "10")
     state.set_cursor("888", "25")
     scheduler.run_query_cycle(replace(config, target_group_ids=("888",)))
-    assert client.calls[0]["message_id"] == "25"
+    assert client.calls == [{"group_id": "888", "query_count": 2}]
+    assert state.get_cursor("888") == "30"
 
 
 def test_multiple_groups_are_queried_sequentially_with_independent_cursors(tmp_path):
